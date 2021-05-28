@@ -18,8 +18,7 @@ from spleeter.utils.logging import configure_logger, logger
 
 
 def separate(
-    deprecated_files: Optional[str] = AudioInputOption,
-    files: List[Path] = AudioInputArgument,
+    filename,
     adapter: str = AudioAdapterOption,
     bitrate: str = AudioBitrateOption,
     codec: Codec = AudioCodecOption,
@@ -35,36 +34,30 @@ def separate(
     """
     Separate audio file(s)
     """
-    from .audio.adapter import AudioAdapter
-    from .separator import Separator
+    from spleeter.audio.adapter import AudioAdapter
+    from spleeter.separator import Separator
 
     configure_logger(verbose)
-    if deprecated_files is not None:
-        logger.error(
-            "⚠️ -i option is not supported anymore, audio files must be supplied "
-            "using input argument instead (see spleeter separate --help)"
-        )
-        raise Exit(20)
-    audio_adapter: AudioAdapter = AudioAdapter.get(adapter)
+
+    audio_adapter: AudioAdapter = AudioAdapter.get(adapter.default)
     separator: Separator = Separator(
-        params_filename, MWF=mwf, stft_backend=stft_backend
+        'spleeter:2stems', MWF=False, stft_backend=STFTBackend.AUTO
     )
-    for filename in files:
-        separator.separate_to_file(
-            str(filename),
-            str(output_path),
-            audio_adapter=audio_adapter,
-            offset=offset,
-            duration=duration,
-            codec=codec,
-            bitrate=bitrate,
-            filename_format=filename_format,
-            synchronous=False,
-        )
+    separator.separate_to_file(
+        filename,
+        'output',
+        audio_adapter=audio_adapter,
+        # offset=offset,
+        # duration=duration,
+        # codec=codec,
+        # bitrate=bitrate,
+        # filename_format=filename_format,
+        synchronous=False,
+    )
     separator.join()
 
 def run(audio_file):
-    print(audio_file)
+    separate(audio_file)
 
 if __name__ == '__main__':
     run(sys.argv[1])
