@@ -201,7 +201,7 @@ class Separator:
         self._features = None
         self._session = None
 
-        self.stft_input_name = "{}_stft".format(self._params["mix_name"])
+        self.stft_input_name = f"{self._params['mix_name']}_stft"
 
     def __del__(self) -> None:
         if self._session:
