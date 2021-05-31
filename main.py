@@ -47,7 +47,7 @@ def separate(
     separator.join()
 
 def run(audio_file, model):
-    if True:
+    if False:
         separate(audio_file, model)
     else:
         spleeter = simplespleeter.Separator(model)

@@ -36,6 +36,7 @@ from spleeter.utils.tensor import pad_and_partition, pad_and_reshape
 
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), 'configs')
 MODEL_DIR = os.path.join(os.path.dirname(__file__), 'pretrained_models')
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'output')
 
 def _get_conv_activation_layer(params: Dict) -> Any:
     """
@@ -184,6 +185,8 @@ def apply_unet(
 
 
 class Separator:
+    EPSILON = 1e-10
+
     def __init__(self, model_name):
         with open(os.path.join(CONFIG_DIR, model_name, 'base_config.json')) as f:
             self._params = json.load(f)
@@ -305,13 +308,75 @@ class Separator:
                 pad_and_partition(self._features[stft_name], self._params['T'])
             )[:, :, : self._params['F'], :]
 
-    def separate_file(self, audio_file):
-        waveform, sr = librosa.load(audio_file, sr=self._sample_rate)
-        if waveform.ndim == 1:
-            waveform = np.stack([waveform, waveform], 1)
-        result = self.separate_waveform(waveform)
-        print('Hello')
-        # soundfile.write(os.path.join(OUTPUT_DIR, fn + f'-{best_value:.3f}' + ext), audio, sr)
+    def _extend_mask(self, mask):
+        """Extend mask, from reduced number of frequency bin to the number of
+        frequency bin in the STFT.
+
+        :param mask: restricted mask
+        :returns: extended mask
+        :raise ValueError: If invalid mask_extension parameter is set.
+        """
+        extension = self._params["mask_extension"]
+        # Extend with average
+        # (dispatch according to energy in the processed band)
+        if extension == "average":
+            extension_row = tf.reduce_mean(mask, axis=2, keepdims=True)
+        # Extend with 0
+        # (avoid extension artifacts but not conservative separation)
+        elif extension == "zeros":
+            mask_shape = tf.shape(mask)
+            extension_row = tf.zeros((mask_shape[0], mask_shape[1], 1, mask_shape[-1]))
+        else:
+            raise ValueError(f"Invalid mask_extension parameter {extension}")
+        n_extra_row = self._params['frame_length']  // 2 + 1 - self._params['F']
+        extension = tf.tile(extension_row, [1, 1, n_extra_row, 1])
+        return tf.concat([mask, extension], axis=2)
+
+    def _build_masks(self):
+        """
+        Compute masks from the output spectrograms of the model.
+        :return:
+        """
+        input_tensor = self._features['mix_spectrogram']
+
+        output_dict = {}
+        for instrument in self._params['instrument_list']:
+            out_name = f"{instrument}_spectrogram"
+            # outputs[out_name] = function(
+            #     input_tensor, output_name=out_name, params=params or {}
+            # )
+            output_dict[out_name] = apply_unet(
+                input_tensor, instrument, self._params["model"]["params"])
+
+
+        stft_feature = self._features['mix_stft']
+        separation_exponent = self._params["separation_exponent"]
+        output_sum = (
+            tf.reduce_sum(
+                [e ** separation_exponent for e in output_dict.values()], axis=0
+            )
+            + self.EPSILON
+        )
+        out = {}
+        for instrument in self._params['instrument_list']:
+            output = output_dict[f"{instrument}_spectrogram"]
+            # Compute mask with the model.
+            instrument_mask = (
+                output ** separation_exponent + (self.EPSILON / len(output_dict))
+            ) / output_sum
+            # Extend mask;
+            instrument_mask = self._extend_mask(instrument_mask)
+            # Stack back mask.
+            old_shape = tf.shape(instrument_mask)
+            new_shape = tf.concat(
+                [[old_shape[0] * old_shape[1]], old_shape[2:]], axis=0
+            )
+            instrument_mask = tf.reshape(instrument_mask, new_shape)
+            # Remove padded part (for mask having the same size as STFT);
+
+            instrument_mask = instrument_mask[: tf.shape(stft_feature)[0], ...]
+            out[instrument] = instrument_mask
+        self._masks = out
 
     def _get_session(self):
         if self._session is None:
@@ -332,21 +397,29 @@ class Separator:
             audio_descriptor (AudioDescriptor):
         """
         with self._tf_graph.as_default():
-            out = {}
+            # out = {}
             self._features = self.get_input_dict_placeholders()
 
             self._build_stft_feature()
 
-            input_tensor = self._features['mix_spectrogram']
+            # input_tensor = self._features['mix_spectrogram']
+            #
+            # outputs = {}
+            # for instrument in self._params['instrument_list']:
+            #     out_name = f"{instrument}"
+            #     # outputs[out_name] = function(
+            #     #     input_tensor, output_name=out_name, params=params or {}
+            #     # )
+            #     outputs[out_name] = apply_unet(
+            #         input_tensor, instrument, self._params["model"]["params"])
 
-            outputs = {}
-            for instrument in self._params['instrument_list']:
-                out_name = f"{instrument}"
-                # outputs[out_name] = function(
-                #     input_tensor, output_name=out_name, params=params or {}
-                # )
-                outputs[out_name] = apply_unet(
-                    input_tensor, instrument, self._params["model"]["params"])
+            self._build_masks()
+
+            out = {}
+            input_stft = self._features['mix_stft']
+            for instrument, mask in self._masks.items():
+                out[instrument] = tf.cast(mask, dtype=tf.complex64) * input_stft
+            self._masked_stfts = out
 
             stft = self._stft(waveform)
             if stft.shape[-1] == 1:
@@ -356,7 +429,7 @@ class Separator:
             sess = self._get_session()
             feed_dict = self.get_feed_dict(self._features, stft, 'my-audio')
             outputs = sess.run(
-                outputs,
+                self._masked_stfts,
                 feed_dict=feed_dict
             )
             for inst in self._params['instrument_list']:
@@ -364,3 +437,15 @@ class Separator:
                     outputs[inst], inverse=True, length=waveform.shape[0]
                 )
             return out
+
+    def separate_file(self, audio_file):
+        waveform, sr = librosa.load(audio_file, sr=self._sample_rate)
+        if waveform.ndim == 1:
+            waveform = np.stack([waveform, waveform], 1)
+        result = self.separate_waveform(waveform)
+        fn, ext = os.path.splitext(os.path.basename(audio_file))
+        out_dir = os.path.join(OUTPUT_DIR, fn)
+        os.makedirs(out_dir, exist_ok=True)
+        for instrument, output in result.items():
+            soundfile.write(os.path.join(out_dir, instrument + '.wav'), output, self._sample_rate)
+
