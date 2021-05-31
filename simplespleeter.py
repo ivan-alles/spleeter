@@ -227,7 +227,7 @@ class Separator:
         return features
 
     def get_feed_dict(self, features, stft, audio_id):
-        return {features["audio_id"]: audio_id, features[self.stft_input_name]: stft}
+        return
 
 
     def _stft(
@@ -313,7 +313,7 @@ class Separator:
             extension_row = tf.zeros((mask_shape[0], mask_shape[1], 1, mask_shape[-1]))
         else:
             raise ValueError(f"Invalid mask_extension parameter {extension}")
-        n_extra_row = self._params['frame_length']  // 2 + 1 - self._params['F']
+        n_extra_row = self._params['frame_length'] // 2 + 1 - self._params['F']
         extension = tf.tile(extension_row, [1, 1, n_extra_row, 1])
         return tf.concat([mask, extension], axis=2)
 
@@ -333,8 +333,6 @@ class Separator:
             output_dict[out_name] = apply_unet(
                 input_tensor, instrument, self._params["model"]["params"])
 
-
-        stft_feature = self._features['mix_stft']
         separation_exponent = self._params["separation_exponent"]
         output_sum = (
             tf.reduce_sum(
@@ -343,6 +341,7 @@ class Separator:
             + self.EPSILON
         )
         out = {}
+
         for instrument in self._params['instrument_list']:
             output = output_dict[f"{instrument}_spectrogram"]
             # Compute mask with the model.
@@ -359,6 +358,7 @@ class Separator:
             instrument_mask = tf.reshape(instrument_mask, new_shape)
             # Remove padded part (for mask having the same size as STFT);
 
+            stft_feature = self._features['mix_stft']
             instrument_mask = instrument_mask[: tf.shape(stft_feature)[0], ...]
             out[instrument] = instrument_mask
         self._masks = out
@@ -401,7 +401,10 @@ class Separator:
             elif stft.shape[-1] > 2:
                 stft = stft[:, :2]
             sess = self._get_session()
-            feed_dict = self.get_feed_dict(self._features, stft, 'my-audio')
+            feed_dict = {
+                self._features["audio_id"]: 'my-audio',
+                self._features[self.stft_input_name]: stft
+            }
             outputs = sess.run(
                 self._masked_stfts,
                 feed_dict=feed_dict
