@@ -20,15 +20,6 @@ from spleeter.utils.logging import configure_logger, logger
 def separate(
     filename,
     adapter: str = AudioAdapterOption,
-    bitrate: str = AudioBitrateOption,
-    codec: Codec = AudioCodecOption,
-    duration: float = AudioDurationOption,
-    offset: float = AudioOffsetOption,
-    output_path: Path = AudioOutputOption,
-    stft_backend: STFTBackend = AudioSTFTBackendOption,
-    filename_format: str = FilenameFormatOption,
-    params_filename: str = ModelParametersOption,
-    mwf: bool = MWFOption,
     verbose: bool = VerboseOption,
 ) -> None:
     """
@@ -47,11 +38,6 @@ def separate(
         filename,
         'output',
         audio_adapter=audio_adapter,
-        # offset=offset,
-        # duration=duration,
-        # codec=codec,
-        # bitrate=bitrate,
-        # filename_format=filename_format,
         synchronous=False,
     )
     separator.join()
