@@ -48,8 +48,10 @@ def separate(
 
 def run(audio_file, model):
     if False:
+        # (more or less) original spleeter.
         separate(audio_file, model)
     else:
+        # Simplified spleeter
         spleeter = simplespleeter.Separator(model)
         spleeter.separate_file(audio_file)
 

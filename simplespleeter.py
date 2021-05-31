@@ -1,3 +1,7 @@
+"""
+ Simplified version without training and architectural sugar.
+"""
+
 import os
 import json
 
