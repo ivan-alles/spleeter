@@ -286,27 +286,8 @@ class Separator:
         spec_name = 'mix_spectrogram'
 
         if stft_name not in self._features:
-            # pad input with a frame of zeros
-            waveform = tf.concat(
-                [
-                    tf.zeros((self._frame_length, self._n_channels)),
-                    self._features["waveform"],
-                ],
-                0,
-            )
-            stft_feature = tf.transpose(
-                stft(
-                    tf.transpose(waveform),
-                    self._frame_length,
-                    self._frame_step,
-                    window_fn=lambda frame_length, dtype: (
-                        hann_window(frame_length, periodic=True, dtype=dtype)
-                    ),
-                    pad_end=True,
-                ),
-                perm=[1, 2, 0],
-            )
-            self._features[f"{self._mix_name}_stft"] = stft_feature
+            raise NotImplementedError('This code was never used.')
+
         if spec_name not in self._features:
             self._features[spec_name] = tf.abs(
                 pad_and_partition(self._features[stft_name], self._params['T'])
