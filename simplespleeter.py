@@ -402,17 +402,6 @@ class Separator:
 
             self._build_stft_feature()
 
-            # input_tensor = self._features['mix_spectrogram']
-            #
-            # outputs = {}
-            # for instrument in self._params['instrument_list']:
-            #     out_name = f"{instrument}"
-            #     # outputs[out_name] = function(
-            #     #     input_tensor, output_name=out_name, params=params or {}
-            #     # )
-            #     outputs[out_name] = apply_unet(
-            #         input_tensor, instrument, self._params["model"]["params"])
-
             self._build_masks()
 
             out = {}
