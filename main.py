@@ -16,9 +16,12 @@ from spleeter import SpleeterError
 from spleeter.options import *
 from spleeter.utils.logging import configure_logger, logger
 
+import simplespleeter
+
 
 def separate(
     filename,
+    model,
     adapter: str = AudioAdapterOption,
     verbose: bool = VerboseOption,
 ) -> None:
@@ -32,7 +35,8 @@ def separate(
 
     audio_adapter: AudioAdapter = AudioAdapter.get(adapter.default)
     separator: Separator = Separator(
-        'spleeter:2stems', MWF=False, stft_backend=STFTBackend.AUTO
+        'spleeter:' + model, MWF=False, stft_backend=STFTBackend.AUTO,
+        multiprocess=False
     )
     separator.separate_to_file(
         filename,
@@ -42,8 +46,16 @@ def separate(
     )
     separator.join()
 
-def run(audio_file):
-    separate(audio_file)
+def run(audio_file, model):
+    if True:
+        separate(audio_file, model)
+    else:
+        spleeter = simplespleeter.Separator(model)
+        spleeter.separate_file(audio_file)
 
 if __name__ == '__main__':
-    run(sys.argv[1])
+    if (len(sys.argv) < 3):
+        print('Usage: main audio model')
+        print('model: 2stems, 3stems, 4stems')
+    else:
+        run(sys.argv[1], sys.argv[2])
