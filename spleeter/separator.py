@@ -267,11 +267,12 @@ class Separator(object):
             elif stft.shape[-1] > 2:
                 stft = stft[:, :2]
             sess = self._get_session()
+            feed_dict = self._get_input_provider().get_feed_dict(
+                features, stft, audio_descriptor
+            )
             outputs = sess.run(
                 outputs,
-                feed_dict=self._get_input_provider().get_feed_dict(
-                    features, stft, audio_descriptor
-                ),
+                feed_dict=feed_dict,
             )
             for inst in self._get_builder().instruments:
                 out[inst] = self._stft(
