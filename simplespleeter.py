@@ -389,11 +389,6 @@ class Separator:
 
             self._build_masks()
 
-            self._masked_stfts = {}
-            input_stft = self._features['mix_stft']
-            for instrument, mask in self._masks.items():
-                self._masked_stfts[instrument] = input_stft * tf.cast(mask, dtype=tf.complex64)
-
             stft = self._stft(waveform)
             if stft.shape[-1] == 1:
                 stft = np.concatenate([stft, stft], axis=-1)
@@ -405,14 +400,14 @@ class Separator:
                 self._features[self.stft_input_name]: stft
             }
             outputs = sess.run(
-                self._masked_stfts,
+                self._masks,
                 feed_dict=feed_dict
             )
 
             converted = {}
             for inst in self._params['instrument_list']:
                 converted[inst] = self._stft(
-                    outputs[inst], inverse=True, length=waveform.shape[0]
+                    outputs[inst] * stft, inverse=True, length=waveform.shape[0]
                 )
             return converted
 
