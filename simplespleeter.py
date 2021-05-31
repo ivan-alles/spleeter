@@ -389,11 +389,10 @@ class Separator:
 
             self._build_masks()
 
-            out = {}
+            self._masked_stfts = {}
             input_stft = self._features['mix_stft']
             for instrument, mask in self._masks.items():
-                out[instrument] = tf.cast(mask, dtype=tf.complex64) * input_stft
-            self._masked_stfts = out
+                self._masked_stfts[instrument] = input_stft * tf.cast(mask, dtype=tf.complex64)
 
             stft = self._stft(waveform)
             if stft.shape[-1] == 1:
@@ -409,11 +408,13 @@ class Separator:
                 self._masked_stfts,
                 feed_dict=feed_dict
             )
+
+            converted = {}
             for inst in self._params['instrument_list']:
-                out[inst] = self._stft(
+                converted[inst] = self._stft(
                     outputs[inst], inverse=True, length=waveform.shape[0]
                 )
-            return out
+            return converted
 
     def separate_file(self, audio_file):
         waveform, sr = librosa.load(audio_file, sr=self._sample_rate)
