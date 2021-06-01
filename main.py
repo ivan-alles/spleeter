@@ -53,7 +53,8 @@ def run(audio_file, model):
     else:
         # Simplified spleeter
         spleeter = simplespleeter.Separator(model)
-        spleeter.separate_file(audio_file)
+        # spleeter.separate_file(audio_file)
+        spleeter.gradient_opt(audio_file)
 
 if __name__ == '__main__':
     if (len(sys.argv) < 3):

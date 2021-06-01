@@ -422,3 +422,43 @@ class Separator:
         for instrument, output in result.items():
             soundfile.write(os.path.join(out_dir, instrument + '.wav'), output, self._sample_rate)
 
+
+    def gradient_opt(self, audio_file):
+        waveform, sr = librosa.load(audio_file, sr=self._sample_rate)
+        if waveform.ndim == 1:
+            waveform = np.stack([waveform, waveform], 1)
+
+        with self._tf_graph.as_default():
+            self._features = self.get_input_dict_placeholders()
+
+            self._build_stft_feature()
+
+            self._build_masks()
+
+            stft = self._stft(waveform)
+            if stft.shape[-1] == 1:
+                stft = np.concatenate([stft, stft], axis=-1)
+            elif stft.shape[-1] > 2:
+                stft = stft[:, :2]
+            sess = self._get_session()
+
+            loss = -tf.reduce_mean(self._masks['vocals']) + tf.reduce_mean(self._masks['accompaniment'])
+            gradient = tf.gradients(loss, self._features[self.stft_input_name])[0]
+
+            for i in range(100):
+                feed_dict = {
+                    self._features["audio_id"]: 'my-audio',
+                    self._features[self.stft_input_name]: stft
+                }
+                g = sess.run(
+                    gradient,
+                    feed_dict=feed_dict
+                )
+
+                lr = 10000
+                # stft += lr * g / (np.abs(g).mean() + 1e-7)
+                stft += lr * g
+
+                audio = self._stft(stft, inverse=True, length=waveform.shape[0])
+                soundfile.write(os.path.join(OUTPUT_DIR, f'opt-{i:03d}.wav'), audio, self._sample_rate)
+
